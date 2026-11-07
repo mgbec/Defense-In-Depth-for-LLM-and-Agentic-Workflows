@@ -49,7 +49,7 @@ jobs:
 
       # Dockerfile hygiene only. The full image (with model downloads) is built on deploy.
       - name: Lint Dockerfile
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@v3.5.0
         with:
           dockerfile: app/Dockerfile
           failure-threshold: warning
