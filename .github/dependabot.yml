@@ -1,0 +1,84 @@
+version: 2
+
+# Weekly version updates, grouped so each ecosystem opens one PR rather than many.
+# Security updates are separate and open immediately regardless of this schedule.
+
+updates:
+  # Gateway runtime and test dependencies (app/requirements*.txt).
+  - package-ecosystem: pip
+    directory: /app
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(app)"
+    groups:
+      app-minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # Presidio is pinned to the exact version llm-guard requires. Bumping it on its own
+      # breaks dependency resolution. Update it together with llm-guard, by hand.
+      - dependency-name: presidio-analyzer
+      - dependency-name: presidio-anonymizer
+
+  # Guardrail regression test dependencies.
+  - package-ecosystem: pip
+    directory: /tests/guardrail
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "deps(tests)"
+    groups:
+      guardrail-tests:
+        update-types: [minor, patch]
+
+  # Base image in app/Dockerfile.
+  - package-ecosystem: docker
+    directory: /app
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "deps(docker)"
+    ignore:
+      # llm-guard 0.3.x supports Python 3.10 to 3.12 only. Take patch releases of 3.12,
+      # and move to a newer Python only after llm-guard supports it.
+      - dependency-name: python
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+
+  # Terraform providers and lock files.
+  - package-ecosystem: terraform
+    directory: /terraform
+    schedule:
+      interval: weekly
+      day: tuesday
+    commit-message:
+      prefix: "deps(terraform)"
+    groups:
+      terraform-providers:
+        update-types: [minor, patch]
+
+  - package-ecosystem: terraform
+    directory: /terraform/bootstrap
+    schedule:
+      interval: weekly
+      day: tuesday
+    commit-message:
+      prefix: "deps(bootstrap)"
+    groups:
+      bootstrap-providers:
+        update-types: [minor, patch]
+
+  # Actions referenced in .github/workflows (pinned by tag).
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: wednesday
+    commit-message:
+      prefix: "deps(actions)"
+    groups:
+      github-actions:
+        update-types: [minor, patch]

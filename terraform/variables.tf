@@ -177,3 +177,9 @@ variable "gateway_env" {
   type        = map(string)
   default     = {}
 }
+
+variable "redteam_source_cidrs" {
+  description = "IPv4 CIDRs of the red-team runner that bypass the WAF. Non-production only (enforced)."
+  type        = list(string)
+  default     = []
+}

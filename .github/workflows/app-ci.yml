@@ -4,7 +4,9 @@ on:
   pull_request:
     paths:
       - "app/**"
+      - "redteam/**"
       - ".github/workflows/app-ci.yml"
+      - ".github/workflows/redteam.yml"
 
 permissions:
   contents: read
@@ -22,7 +24,7 @@ jobs:
       # The tests fake LLM Guard, Presidio, and AWS, so only the light web dependencies
       # are installed here (no torch, no model downloads).
       - name: Install test dependencies
-        run: pip install fastapi==0.115.12 pydantic==2.11.4 httpx==0.28.1 pytest==8.3.5 ruff==0.11.10
+        run: pip install fastapi==0.115.12 pydantic==2.11.4 httpx==0.28.1 pytest==9.0.3 ruff==0.11.10 pyyaml==6.0.2
 
       - name: Lint and byte-compile
         working-directory: app
@@ -33,6 +35,17 @@ jobs:
       - name: Unit tests
         working-directory: app
         run: pytest
+
+      - name: Lint red-team scripts and configs
+        run: |
+          ruff check redteam
+          python - <<'PY'
+          import json, pathlib, yaml
+          json.loads(pathlib.Path("redteam/garak/rest.template.json").read_text())
+          yaml.safe_load(pathlib.Path("redteam/promptfoo/promptfooconfig.template.yaml").read_text())
+          yaml.safe_load(pathlib.Path(".github/workflows/redteam.yml").read_text())
+          print("red-team configs parse")
+          PY
 
       # Dockerfile hygiene only. The full image (with model downloads) is built on deploy.
       - name: Lint Dockerfile

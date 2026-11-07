@@ -8,3 +8,8 @@ crash.log
 guardrail-report.json
 __pycache__/
 .venv/
+
+redteam/promptfoo/promptfooconfig.yaml
+redteam/promptfoo/redteam.yaml
+redteam/promptfoo/results.json
+garak-out/

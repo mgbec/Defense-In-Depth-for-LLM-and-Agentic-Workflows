@@ -25,6 +25,16 @@ variable "log_retention_days" {
   default = 30
 }
 
+variable "exempt_source_cidrs" {
+  description = <<-EOT
+    IPv4 CIDRs that bypass ALL WAF rules. Intended only for a dedicated red-team runner in
+    non-production environments: without it the per-IP rate limit blocks the scan and the
+    results would measure the WAF instead of the gateway. Keep empty in production.
+  EOT
+  type        = list(string)
+  default     = []
+}
+
 variable "blocked_alarm_threshold" {
   type    = number
   default = 500

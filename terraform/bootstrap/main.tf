@@ -334,6 +334,67 @@ resource "aws_iam_role_policy" "apply_tests" {
   policy = data.aws_iam_policy_document.tests.json
 }
 
+# ------------------------------------------------------------------ red-team role
+# The scheduled Promptfoo job uses a Bedrock model to generate attacks and grade results.
+# It gets its own role that can ONLY invoke models, and is trusted only from the named
+# GitHub Environment (non-production).
+variable "redteam_environment" {
+  description = "GitHub Environment allowed to assume the red-team role. Keep this non-production."
+  type        = string
+  default     = "dev"
+}
+
+variable "redteam_model_arns" {
+  description = "Bedrock ARNs the red-team job may invoke. Narrow to the single model/profile you use."
+  type        = list(string)
+  default = [
+    "arn:aws:bedrock:*::foundation-model/*",
+    "arn:aws:bedrock:*:*:inference-profile/*",
+  ]
+}
+
+data "aws_iam_policy_document" "redteam_trust" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    principals {
+      type        = "Federated"
+      identifiers = [local.oidc_arn]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:sub"
+      values   = ["repo:${var.github_repository}:environment:${var.redteam_environment}"]
+    }
+  }
+}
+
+data "aws_iam_policy_document" "redteam" {
+  statement {
+    actions   = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
+    resources = var.redteam_model_arns
+  }
+}
+
+resource "aws_iam_role" "redteam" {
+  name               = "${var.project}-gha-redteam"
+  assume_role_policy = data.aws_iam_policy_document.redteam_trust.json
+}
+
+resource "aws_iam_role_policy" "redteam" {
+  name   = "invoke-attack-model"
+  role   = aws_iam_role.redteam.id
+  policy = data.aws_iam_policy_document.redteam.json
+}
+
+output "redteam_role_arn" {
+  value = aws_iam_role.redteam.arn
+}
+
 output "state_bucket" {
   value = aws_s3_bucket.state.bucket
 }

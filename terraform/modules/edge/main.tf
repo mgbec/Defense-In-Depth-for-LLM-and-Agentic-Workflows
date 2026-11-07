@@ -22,6 +22,31 @@ resource "aws_wafv2_web_acl" "this" {
     allow {}
   }
 
+  # Dev-only escape hatch for the red-team runner; see var.exempt_source_cidrs.
+  dynamic "rule" {
+    for_each = length(var.exempt_source_cidrs) > 0 ? [1] : []
+    content {
+      name     = "exempt-redteam-runner"
+      priority = 1
+
+      action {
+        allow {}
+      }
+
+      statement {
+        ip_set_reference_statement {
+          arn = aws_wafv2_ip_set.exempt[0].arn
+        }
+      }
+
+      visibility_config {
+        cloudwatch_metrics_enabled = true
+        metric_name                = "${var.name_prefix}-exempt-redteam"
+        sampled_requests_enabled   = true
+      }
+    }
+  }
+
   rule {
     name     = "max-body-size"
     priority = 5
@@ -107,6 +132,17 @@ resource "aws_wafv2_web_acl" "this" {
     metric_name                = "${var.name_prefix}-edge"
     sampled_requests_enabled   = true
   }
+}
+
+resource "aws_wafv2_ip_set" "exempt" {
+  count = length(var.exempt_source_cidrs) > 0 ? 1 : 0
+
+  name               = "${var.name_prefix}-redteam-exempt"
+  description        = "Red-team runner source addresses (non-production only)"
+  scope              = "REGIONAL"
+  ip_address_version = "IPV4"
+  addresses          = var.exempt_source_cidrs
+  tags               = var.tags
 }
 
 resource "aws_wafv2_web_acl_association" "this" {

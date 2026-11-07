@@ -33,3 +33,7 @@ enable_gateway = false
 gateway_desired_count = 1
 gateway_min_count     = 1
 gateway_max_count     = 2
+
+# ---- Red-team runner (non-production only; bypasses the WAF rate limit) ----
+# Set to the egress CIDR of the runner that executes .github/workflows/redteam.yml.
+# redteam_source_cidrs = ["10.0.12.34/32"]

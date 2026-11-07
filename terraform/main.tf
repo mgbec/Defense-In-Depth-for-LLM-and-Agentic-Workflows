@@ -100,6 +100,19 @@ module "edge" {
   max_body_bytes          = var.waf_max_body_bytes
   log_retention_days      = var.log_retention_days
   alarm_topic_arn         = module.audit.alerts_topic_arn
+  exempt_source_cidrs     = var.redteam_source_cidrs
+
+  depends_on = [terraform_data.redteam_guard]
+}
+
+# Refuses to plan a production WAF that has a bypass rule.
+resource "terraform_data" "redteam_guard" {
+  lifecycle {
+    precondition {
+      condition     = var.environment != "prod" || length(var.redteam_source_cidrs) == 0
+      error_message = "redteam_source_cidrs bypasses the WAF and must be empty in prod."
+    }
+  }
 }
 
 # Published so applications and the CI regression suite resolve the pinned guardrail

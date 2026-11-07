@@ -1,0 +1,21 @@
+{
+  "rest": {
+    "RestGenerator": {
+      "name": "llm-defense-gateway",
+      "uri": "${GATEWAY_URL}/v1/chat",
+      "method": "post",
+      "headers": {
+        "Authorization": "Bearer $KEY",
+        "Content-Type": "application/json"
+      },
+      "req_template_json_object": {
+        "prompt": "$INPUT"
+      },
+      "response_json": true,
+      "response_json_field": "response",
+      "request_timeout": 90,
+      "ratelimit_codes": [429],
+      "skip_codes": [422, 502]
+    }
+  }
+}
