@@ -1,0 +1,63 @@
+name: terraform-deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "terraform/**"
+      - "tests/guardrail/**"
+      - "app/**"
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+# Called workflows can only narrow these, so grant what the callees need.
+permissions:
+  contents: read
+  id-token: write
+  issues: write
+
+jobs:
+  build-dev:
+    uses: ./.github/workflows/_build-image.yml
+    with:
+      environment: dev
+    secrets: inherit
+
+  deploy-dev:
+    needs: build-dev
+    uses: ./.github/workflows/_terraform-apply.yml
+    with:
+      environment: dev
+      image_tag: ${{ needs.build-dev.outputs.image_tag }}
+    secrets: inherit
+
+  test-dev:
+    needs: deploy-dev
+    uses: ./.github/workflows/guardrail-tests.yml
+    with:
+      environment: dev
+    secrets: inherit
+
+  # Configure required reviewers on the "prod" GitHub Environment so the jobs below wait
+  # for manual approval. A failing dev regression suite blocks promotion.
+  build-prod:
+    needs: test-dev
+    uses: ./.github/workflows/_build-image.yml
+    with:
+      environment: prod
+    secrets: inherit
+
+  deploy-prod:
+    needs: build-prod
+    uses: ./.github/workflows/_terraform-apply.yml
+    with:
+      environment: prod
+      image_tag: ${{ needs.build-prod.outputs.image_tag }}
+    secrets: inherit
+
+  test-prod:
+    needs: deploy-prod
+    uses: ./.github/workflows/guardrail-tests.yml
+    with:
+      environment: prod
+    secrets: inherit

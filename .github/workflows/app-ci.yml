@@ -1,0 +1,43 @@
+name: app-ci
+
+on:
+  pull_request:
+    paths:
+      - "app/**"
+      - ".github/workflows/app-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # The tests fake LLM Guard, Presidio, and AWS, so only the light web dependencies
+      # are installed here (no torch, no model downloads).
+      - name: Install test dependencies
+        run: pip install fastapi==0.115.12 pydantic==2.11.4 httpx==0.28.1 pytest==8.3.5 ruff==0.11.10
+
+      - name: Lint and byte-compile
+        working-directory: app
+        run: |
+          ruff check .
+          python -m compileall -q gateway scripts
+
+      - name: Unit tests
+        working-directory: app
+        run: pytest
+
+      # Dockerfile hygiene only. The full image (with model downloads) is built on deploy.
+      - name: Lint Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: app/Dockerfile
+          failure-threshold: warning
+          ignore: DL3013,DL3042

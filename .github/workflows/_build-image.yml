@@ -1,0 +1,81 @@
+name: _build-image
+
+# Builds the gateway image once per commit and pushes it to ECR. If the tag already exists
+# (for example dev and prod share an account) the build is skipped.
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+    outputs:
+      image_tag:
+        value: ${{ jobs.build.outputs.image_tag }}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build:
+    name: build gateway image
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    outputs:
+      image_tag: ${{ github.sha }}
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      REPOSITORY: llm-defense-gateway
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_APPLY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Check whether the image already exists
+        id: exists
+        run: |
+          if aws ecr describe-images --repository-name "$REPOSITORY" \
+               --image-ids imageTag="${{ github.sha }}" >/dev/null 2>&1; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Log in to ECR
+        if: steps.exists.outputs.found == 'false'
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-buildx-action@v3
+        if: steps.exists.outputs.found == 'false'
+
+      # Model weights are downloaded during the build, so this is slow the first time.
+      # Layer caching in the GitHub Actions cache keeps later builds fast.
+      - name: Build and push
+        if: steps.exists.outputs.found == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: app
+          push: true
+          tags: ${{ steps.ecr.outputs.registry }}/${{ env.REPOSITORY }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
+      # ECR scans on push (enabled in bootstrap). Fail the pipeline on CRITICAL findings
+      # so a vulnerable image is never deployed. Scan results can take a minute to appear.
+      - name: Gate on ECR scan findings
+        run: |
+          aws ecr wait image-scan-complete --repository-name "$REPOSITORY" \
+            --image-id imageTag="${{ github.sha }}"
+          critical=$(aws ecr describe-image-scan-findings --repository-name "$REPOSITORY" \
+            --image-id imageTag="${{ github.sha }}" \
+            --query 'imageScanFindings.findingSeverityCounts.CRITICAL' --output text)
+          echo "CRITICAL findings: ${critical}"
+          if [ "$critical" != "None" ] && [ "$critical" -gt 0 ]; then
+            echo "::error::Image has $critical CRITICAL vulnerabilities"
+            exit 1
+          fi

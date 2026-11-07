@@ -1,0 +1,56 @@
+name: _terraform-apply
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      image_tag:
+        description: Gateway image tag already pushed to ECR (the commit SHA).
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  apply:
+    name: apply (${{ inputs.environment }})
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    # One apply per environment at a time; never cancel an in-flight apply.
+    concurrency:
+      group: terraform-apply-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.5"
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_APPLY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Init
+        working-directory: terraform
+        run: terraform init -input=false -backend-config=envs/${{ inputs.environment }}.backend.hcl
+
+      - name: Plan
+        working-directory: terraform
+        run: |
+          terraform plan -input=false -lock-timeout=60s \
+            -var-file=envs/${{ inputs.environment }}.tfvars \
+            -var image_tag=${{ inputs.image_tag }} -out=tfplan
+
+      # The plan was already reviewed on the PR. This applies exactly the plan generated in
+      # this job, so nothing changes between plan and apply.
+      - name: Apply saved plan
+        working-directory: terraform
+        run: terraform apply -input=false -lock-timeout=60s tfplan
